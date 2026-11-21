@@ -248,6 +248,38 @@ class SolarmonTests(unittest.TestCase):
         ])
         self.assertEqual([call.args[0] for call in sleep.call_args_list], [60, 5, 5, 60])
 
+    def test_error_backoff_uses_elapsed_time_not_loop_steps(self):
+        cfg = RawConfigParser()
+        cfg.read_dict({
+            'query': {'interval': '5', 'offline_interval': '60', 'error_interval': '30'},
+            'inverters.roof': {'unit': '1'},
+            'inverters.garage': {'unit': '2'},
+        })
+        serial = Mock()
+        serial.connect.return_value = True
+        roof = Mock()
+        roof.read.side_effect = [OSError('read failed'), {'Pac': 42}]
+        garage = Mock()
+        garage.read.side_effect = [OSError('read failed'), {'Pac': 13}]
+        mqtt_client = RecordingClient()
+        mqtt_client.solarmon_availability = solarmon.MqttAvailability(
+            mqtt_client, 'solar/inverter/availability')
+
+        with (
+            patch.object(solarmon, 'load_settings', return_value=cfg),
+            patch.object(solarmon, 'ModbusClient', return_value=serial),
+            patch.object(solarmon, 'Growatt', side_effect=[roof, garage]),
+            patch.object(solarmon, 'mqtt_setup', return_value=mqtt_client),
+            patch.object(solarmon.time, 'monotonic', side_effect=[0, 10, 20, 30, 60, 70]),
+            patch.object(solarmon.time, 'sleep', side_effect=[None, KeyboardInterrupt]) as sleep,
+        ):
+            with self.assertRaises(KeyboardInterrupt):
+                solarmon.main()
+
+        self.assertEqual(roof.read.call_count, 2)
+        self.assertEqual(garage.read.call_count, 2)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [60, 5])
+
     def test_mqtt_reconnect_republishes_discovery_for_all_inverters(self):
         cfg = RawConfigParser()
         cfg.read_dict({

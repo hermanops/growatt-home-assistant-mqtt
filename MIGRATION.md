@@ -11,6 +11,7 @@ Migrating from the old unit (pip at every start)
 ----
 Older versions of `solarmon.service` ran `pip install` as root in
 `ExecStartPre` on every start. To migrate:
+Run the following commands on the Pi as root:
 
 ```bash
 # Host: solarmon (Pi)

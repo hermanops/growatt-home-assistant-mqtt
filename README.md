@@ -27,6 +27,12 @@ Telemetry is published to MQTT only; configure the `[mqtt]` section in `solarmon
 | `ha_prefix` | `homeassistant` | HA discovery prefix |
 | `device_id` / `device_name` | `solar_inverter` / `Solar Inverter` | HA device identity |
 
+Home Assistant discovery configs are retained independently of the `retain` setting.
+Renaming or removing a sensor does not remove its old discovery config, so its
+entity may remain in Home Assistant. To remove it, use an MQTT client to publish
+an empty retained message to the old discovery topic:
+`<ha_prefix>/sensor/<device_id>_<old_sensor_suffix>/config`. Use the old
+`ha_prefix` and `device_id` if those have also changed.
 
 Reading from Multiple Units
 ----

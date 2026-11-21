@@ -47,17 +47,20 @@ Telemetry is published to MQTT only; configure the `[mqtt]` section in `solarmon
 Home Assistant Power, PV Power, PV1 Current, and energy sensors use the service
 availability topic. Power, PV Power, and PV1 Current are published as `0` when
 an inverter poll returns no data; energy sensors retain their last readings
-while the inverter is asleep. Other sensors use inverter polling availability.
+while the inverter is asleep. Other sensors require both service and inverter
+polling availability.
 
 Each `[inverters.<name>]` section has its own MQTT state topics and Home
 Assistant device. The name must be non-empty and cannot contain `/`, `+`, `#`
-or a null character. The shared retained availability topic starts `offline`
+or a null character. The retained polling availability topic starts `offline`
 until a poll succeeds, then is `online` if at least one inverter responds in
-the latest poll cycle, or `offline` if none do. On MQTT reconnect the latest
-polling status is republished; the MQTT last will also reports `offline` on
-an unexpected disconnect. Home Assistant marks the sensors unavailable when
-offline. Availability is shared, not per inverter: if one inverter responds,
-the others' retained sensor values may be stale.
+the latest poll cycle, or `offline` if none do. The retained service topic is
+set `online` on MQTT connect and has the single MQTT last will, which reports
+`offline` on an unexpected disconnect. Generation and energy sensors depend
+only on service availability; other sensors require both service and polling
+availability. On reconnect, the latest polling status is republished. Polling
+availability is shared, not per inverter: if one inverter responds, the others'
+retained sensor values may be stale.
 
 The `fault` and `fault_code` sensors report the decoded fault description and
 numeric code. They update only when the fault register block is read

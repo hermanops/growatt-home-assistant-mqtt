@@ -17,6 +17,8 @@ the release process.
   from inverter polling status. Publish zero for the three live generation
   sensors when an inverter does not respond, while preserving the last energy
   counter readings.
+- Use one service-topic Last Will and combine service plus polling availability
+  for sensors that require a live inverter reading.
 
 ## [1.0.0] - 2026-11-21
 

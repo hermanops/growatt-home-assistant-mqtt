@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from configparser import RawConfigParser
 from types import SimpleNamespace
-from unittest.mock import Mock, call as mock_call, patch
+from unittest.mock import Mock, patch
 
 import growatt
 import solarmon
@@ -223,9 +223,22 @@ class SolarmonTests(unittest.TestCase):
         for entry in discovery:
             stays_available = entry['unique_id'].endswith(
                 ('_power', '_pv_power', '_pv1_current', '_energy_today', '_energy_total'))
-            expected_topic = (
-                'solar/inverter/service' if stays_available else 'solar/inverter/availability')
-            self.assertEqual(entry['availability_topic'], expected_topic)
+            if stays_available:
+                self.assertEqual(entry['availability_topic'], 'solar/inverter/service')
+            else:
+                self.assertEqual(entry['availability'], [
+                    {
+                        'topic': 'solar/inverter/service',
+                        'payload_available': 'online',
+                        'payload_not_available': 'offline',
+                    },
+                    {
+                        'topic': 'solar/inverter/availability',
+                        'payload_available': 'online',
+                        'payload_not_available': 'offline',
+                    },
+                ])
+                self.assertEqual(entry['availability_mode'], 'all')
         self.assertEqual(len({entry['unique_id'] for entry in discovery}), len(discovery))
         devices = {entry['device']['identifiers'][0] for entry in discovery}
         self.assertEqual(len(devices), 2)
@@ -366,12 +379,22 @@ class SolarmonTests(unittest.TestCase):
             'inverters.garage': {'unit': '2'},
         })
         client = Mock()
+        configured_will = {}
+
+        def record_will(topic, payload, qos, retain):
+            configured_will.update(topic=topic, payload=payload, qos=qos, retain=retain)
+
+        client.will_set.side_effect = record_will
         with patch.object(solarmon.mqtt, 'Client', return_value=client):
             solarmon.mqtt_setup(cfg)
-        self.assertEqual(client.will_set.call_args_list, [
-            mock_call('solar/inverter/availability', payload='offline', qos=0, retain=True),
-            mock_call('solar/inverter/service', payload='offline', qos=0, retain=True),
-        ])
+        self.assertEqual(configured_will, {
+            'topic': 'solar/inverter/service',
+            'payload': 'offline',
+            'qos': 0,
+            'retain': True,
+        })
+        client.will_set.assert_called_once_with(
+            'solar/inverter/service', payload='offline', qos=0, retain=True)
 
         client.on_connect(client, None, None, 1, None)
         client.publish.assert_not_called()

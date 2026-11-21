@@ -91,7 +91,7 @@ class SolarmonTests(unittest.TestCase):
         serial.read_holding_registers.return_value.registers = [1]
         inverter = growatt.Growatt(serial, 'main', 1)
 
-        for code, text in ((0, 'None'), (29, 'AC Voltage Outrange'), (999, '999')):
+        for code, text in ((0, 'No Fault'), (29, 'AC Voltage Outrange'), (999, '999')):
             with self.subTest(code=code):
                 core = SimpleNamespace(registers=[0] * 33)
                 fault = SimpleNamespace(registers=[0] * 7 + [code, 0])

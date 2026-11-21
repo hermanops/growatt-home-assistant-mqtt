@@ -237,7 +237,7 @@ def main(config_path=None):
         growatt.print_info()
         inverters.append({
             'name': name,
-            'error_sleep': 0,
+            'error_until': 0.0,
             'growatt': growatt,
         })
 
@@ -246,8 +246,7 @@ def main(config_path=None):
     while True:
         online = False
         for inverter in inverters:
-            if inverter['error_sleep'] > 0:
-                inverter['error_sleep'] -= interval
+            if time.monotonic() < inverter['error_until']:
                 continue
 
             growatt = inverter['growatt']
@@ -265,7 +264,7 @@ def main(config_path=None):
             except Exception as err:
                 print(growatt.name)
                 print(err)
-                inverter['error_sleep'] = error_interval
+                inverter['error_until'] = time.monotonic() + error_interval
 
         if mqtt_client:
             mqtt_client.solarmon_availability.set_online(online)

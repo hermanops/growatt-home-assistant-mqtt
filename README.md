@@ -16,6 +16,11 @@ How to use
   .venv/bin/pip install -r requirements.txt
   .venv/bin/python solarmon.py
   ```
+- Run the unit tests:
+  ```bash
+  # Host: development machine, from the repository root
+  .venv/bin/python -m unittest discover -s tests -v
+  ```
 
 MQTT / Home Assistant
 ----

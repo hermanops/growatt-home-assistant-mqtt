@@ -1,24 +1,53 @@
 [Unit]
-Description=Solarmon
+Description=Solarmon (Growatt RS485 -> MQTT)
 Wants=network-online.target
 After=network-online.target
 StartLimitIntervalSec=10min
-StartLimitBurst=3
+StartLimitBurst=5
 
 [Service]
-# Sync Python deps before each start so a git pull that changes requirements.txt
-# is applied automatically. '+' runs as root (libs live in system dist-packages
-# while the service runs as User=pi); '-' tolerates failure (e.g. offline boot).
-ExecStartPre=+/usr/bin/python3 -m pip install --disable-pip-version-check --no-input -r /home/pi/solarmon/requirements.txt
-ExecStart=/usr/bin/python3 -u solarmon.py
+Type=simple
+User=pi
+Group=pi
+SupplementaryGroups=dialout
 WorkingDirectory=/home/pi/solarmon
+# Deps live in a venv owned by pi (see README). No install at start:
+# use scripts/update.sh after a git pull.
+ExecStart=/home/pi/solarmon/.venv/bin/python -u solarmon.py
+Restart=on-failure
+RestartSec=10
 StandardOutput=journal
 StandardError=journal
-RestartSec=10
-RestartPreventExitStatus=0
-WatchdogSec=0
-Restart=always
-User=pi
+
+# --- Hardening ---
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+UMask=0027
+# Serial access only (USB adapter, Pi UART, 8250 UART)
+DevicePolicy=closed
+DeviceAllow=char-ttyUSB rw
+DeviceAllow=char-ttyAMA rw
+DeviceAllow=char-ttyS rw
 
 [Install]
 WantedBy=multi-user.target

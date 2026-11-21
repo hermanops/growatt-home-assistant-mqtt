@@ -69,7 +69,7 @@ SENSOR_DEFS = {
     "ac_current":         ("AC Current",         "A",   "current",     "measurement"),
     "grid_frequency":     ("Grid Frequency",     "Hz",  "frequency",   "measurement"),
     "inverter_temp":      ("Inverter Temperature","°C", "temperature", "measurement"),
-    "energy_today":       ("Energy Today",       "kWh", "energy",      "total"),
+    "energy_today":       ("Energy Today",       "kWh", "energy",      "total_increasing"),
     "energy_total":       ("Energy Total",       "kWh", "energy",      "total_increasing"),
     "inverter_status":    ("Inverter Status",    None,  None,          None),
     "inverter_status_code":("Inverter Status Code",None, None,         None),
@@ -118,7 +118,6 @@ def mqtt_publish_discovery(client, cfg):
         payload = {
             "name": name,
             "unique_id": uid,
-            "default_entity_id": f"sensor.{device_id}_{suffix}",
             "state_topic": state_topic,
             "availability_topic": avail_topic,
             "payload_available": "online",

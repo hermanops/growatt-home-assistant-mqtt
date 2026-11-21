@@ -117,7 +117,7 @@ def _read_input_safe(client, unit, start, count, retries=2, delay=0.05):
     Returns a response with .registers or None if all attempts fail.
     """
     last_err = None
-    for _ in range(retries + 1):
+    for attempt in range(retries + 1):
         try:
             resp = client.read_input_registers(start, count=count, slave=unit)
             if _resp_ok(resp):
@@ -125,7 +125,8 @@ def _read_input_safe(client, unit, start, count, retries=2, delay=0.05):
             last_err = resp
         except Exception as e:  # serial/IO errors, timeouts
             last_err = e
-        time.sleep(delay)
+        if attempt < retries:  # no point sleeping after the final attempt
+            time.sleep(delay)
     logger.debug("Input read %d..%d failed after %d tries: %s",
                  start, start + count - 1, retries + 1, last_err)
     return None

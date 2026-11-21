@@ -157,72 +157,84 @@ def mqtt_publish_values(client, cfg, info):
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
-settings = RawConfigParser()
-settings.read(os.path.dirname(os.path.realpath(__file__)) + '/solarmon.cfg')
+def load_settings(config_path=None):
+    """Load the application config from config_path or the default config file."""
+    if config_path is None:
+        config_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'solarmon.cfg')
 
-interval = settings.getint('query', 'interval', fallback=1)
-offline_interval = settings.getint('query', 'offline_interval', fallback=60)
-error_interval = settings.getint('query', 'error_interval', fallback=60)
+    settings = RawConfigParser()
+    settings.read(config_path)
+    return settings
 
-# pymodbus log level. WARNING shows e.g. "Cleanup recv buffer before send" at
-# dawn/dusk when the inverter powers its RS485 transceiver on/off (harmless).
-logging.getLogger('pymodbus').setLevel(
-    settings.get('solarmon', 'modbus_log_level', fallback='WARNING').upper())
 
-# Serial connection
-print('Setup Serial Connection... ', end='')
-port = settings.get('solarmon', 'port', fallback='/dev/ttyUSB0')
-client = ModbusClient(port=port, baudrate=9600, stopbits=1, parity='N', bytesize=8, timeout=1)
-if not client.connect():
-    raise SystemExit(f"Could not open serial port {port}")
-print('Done!')
+def main(config_path=None):
+    settings = load_settings(config_path)
 
-# MQTT
-mqtt_client = mqtt_setup(settings)
+    interval = settings.getint('query', 'interval', fallback=1)
+    offline_interval = settings.getint('query', 'offline_interval', fallback=60)
+    error_interval = settings.getint('query', 'error_interval', fallback=60)
 
-print('Loading inverters... ')
-inverters = []
-for section in settings.sections():
-    if not section.startswith('inverters.'):
-        continue
+    # pymodbus log level. WARNING shows e.g. "Cleanup recv buffer before send" at
+    # dawn/dusk when the inverter powers its RS485 transceiver on/off (harmless).
+    logging.getLogger('pymodbus').setLevel(
+        settings.get('solarmon', 'modbus_log_level', fallback='WARNING').upper())
 
-    name = section[10:]
-    unit = settings.getint(section, 'unit')
-    growatt = Growatt(client, name, unit)
-    growatt.print_info()
-    inverters.append({
-        'name': name,
-        'error_sleep': 0,
-        'growatt': growatt,
-    })
+    print('Setup Serial Connection... ', end='')
+    port = settings.get('solarmon', 'port', fallback='/dev/ttyUSB0')
+    client = ModbusClient(port=port, baudrate=9600, stopbits=1, parity='N', bytesize=8, timeout=1)
+    if not client.connect():
+        raise SystemExit(f"Could not open serial port {port}")
+    print('Done!')
 
-print('Done!')
+    mqtt_client = mqtt_setup(settings)
 
-while True:
-    online = False
-    for inverter in inverters:
-        if inverter['error_sleep'] > 0:
-            inverter['error_sleep'] -= interval
+    print('Loading inverters... ')
+    inverters = []
+    for section in settings.sections():
+        if not section.startswith('inverters.'):
             continue
 
-        growatt = inverter['growatt']
-        try:
-            info = growatt.read()
+        name = section[10:]
+        unit = settings.getint(section, 'unit')
+        growatt = Growatt(client, name, unit)
+        growatt.print_info()
+        inverters.append({
+            'name': name,
+            'error_sleep': 0,
+            'growatt': growatt,
+        })
 
-            if info is None:
+    print('Done!')
+
+    while True:
+        online = False
+        for inverter in inverters:
+            if inverter['error_sleep'] > 0:
+                inverter['error_sleep'] -= interval
                 continue
 
-            online = True
+            growatt = inverter['growatt']
+            try:
+                info = growatt.read()
 
-            if mqtt_client:
-                mqtt_publish_values(mqtt_client, settings, info)
+                if info is None:
+                    continue
 
-        except Exception as err:
-            print(growatt.name)
-            print(err)
-            inverter['error_sleep'] = error_interval
+                online = True
 
-    if online:
-        time.sleep(interval)
-    else:
-        time.sleep(offline_interval)
+                if mqtt_client:
+                    mqtt_publish_values(mqtt_client, settings, info)
+
+            except Exception as err:
+                print(growatt.name)
+                print(err)
+                inverter['error_sleep'] = error_interval
+
+        if online:
+            time.sleep(interval)
+        else:
+            time.sleep(offline_interval)
+
+
+if __name__ == '__main__':
+    main()

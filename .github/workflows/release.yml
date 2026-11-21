@@ -17,10 +17,11 @@ jobs:
         id: notes
         run: |
           version="${GITHUB_REF_NAME#v}"
-          # Grab the "## [X.Y.Z] ..." block up to (not including) the next "## [" heading.
+          # Grab the "## [X.Y.Z] ..." block up to (not including) the next "## ["
+          # heading or the link-reference definitions at the bottom of the file.
           awk -v ver="$version" '
             $0 ~ "^## \\[" ver "\\]" {inblock=1; next}
-            inblock && /^## \[/ {inblock=0}
+            inblock && (/^## \[/ || /^\[.*\]:/) {inblock=0}
             inblock {print}
           ' CHANGELOG.md > release-notes.md
           echo "Version: $version"

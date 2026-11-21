@@ -5,6 +5,7 @@ import os
 import json
 import socket
 import logging
+import threading
 
 from configparser import RawConfigParser
 from pymodbus.client import ModbusSerialClient as ModbusClient
@@ -15,6 +16,26 @@ try:
     import paho.mqtt.client as mqtt
 except Exception:
     mqtt = None
+
+
+class MqttAvailability:
+    def __init__(self, client, topic):
+        self.client = client
+        self.topic = topic
+        self.online = False
+        self.lock = threading.Lock()
+
+    def publish(self):
+        with self.lock:
+            self._publish()
+
+    def set_online(self, online):
+        with self.lock:
+            self.online = online
+            self._publish()
+
+    def _publish(self):
+        self.client.publish(self.topic, "online" if self.online else "offline", qos=0, retain=True)
 
 
 def mqtt_setup(cfg):
@@ -40,13 +61,13 @@ def mqtt_setup(cfg):
     # LWT / availability
     avail_topic = f"{base}/availability"
     client.will_set(avail_topic, payload="offline", qos=0, retain=True)
+    client.solarmon_availability = MqttAvailability(client, avail_topic)
 
     def on_connect(c, userdata, flags, reason_code, properties):
         if reason_code != 0:
             print(f"MQTT connect failed: {reason_code}")
             return
-        # (Re)publish on every connect so a broker restart doesn't leave us 'offline'
-        c.publish(avail_topic, "online", qos=0, retain=True)
+        client.solarmon_availability.publish()
         mqtt_publish_discovery(c, cfg)
 
     client.on_connect = on_connect
@@ -161,7 +182,7 @@ def mqtt_publish_values(client, cfg, inverter_name, info):
 
     for field, (suffix, formatter) in FIELD_MAP.items():
         val = info.get(field)
-        if val is None:
+        if val is None or val == "None":
             continue
         try:
             payload = formatter(val)
@@ -245,6 +266,9 @@ def main(config_path=None):
                 print(growatt.name)
                 print(err)
                 inverter['error_sleep'] = error_interval
+
+        if mqtt_client:
+            mqtt_client.solarmon_availability.set_online(online)
 
         if online:
             time.sleep(interval)

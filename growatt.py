@@ -25,7 +25,7 @@ StateCodes = {
 
 # Verify these texts against the protocol PDF for your firmware.
 ErrorCodes = {
-    0: 'None',
+    0: 'No Fault',
     24: 'Auto Test Failed',
     25: 'No AC Connection',
     26: 'PV Isolation Low',

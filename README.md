@@ -130,11 +130,32 @@ sudo -u pi git pull --ff-only
 sudo -u pi python3 -m venv .venv
 sudo -u pi .venv/bin/pip install --disable-pip-version-check -r requirements.txt
 install -m 0644 solarmon.service /etc/systemd/system/solarmon.service
-rm -rf /etc/systemd/system/solarmon.service.d # old override, no longer needed
+ls -l /etc/systemd/system/solarmon.service.d/ 2>/dev/null  # inspect drop-ins first
 systemctl daemon-reload
 systemctl restart solarmon
-# Optional, once the new unit works: remove the root-installed packages
-python3 -m pip uninstall -y pymodbus paho-mqtt
+systemctl cat solarmon                        # check the effective unit
+```
+
+Drop-ins in `/etc/systemd/system/solarmon.service.d/` override the new unit.
+Remove only a legacy drop-in that you no longer need, for example an
+`override.conf` that only sets `WatchdogSec=0`, `Type=simple` or
+`NotifyAccess=none`:
+```bash
+# Host: solarmon (Pi), as root
+cat /etc/systemd/system/solarmon.service.d/override.conf
+rm /etc/systemd/system/solarmon.service.d/override.conf
+systemctl daemon-reload && systemctl restart solarmon
+```
+
+The old unit installed `pymodbus` and `paho-mqtt` with root pip into the
+system interpreter. The new service does not use them. Leaving them installed
+is safe. Remove them only if they are in `/usr/local` (installed by pip, not
+by apt) and no other application on the host uses them:
+```bash
+# Host: solarmon (Pi), as root
+python3 -m pip show pymodbus paho-mqtt | grep -E '^(Name|Location|Required-by)'
+# Only if Location is /usr/local/... and Required-by is empty:
+python3 -m pip uninstall pymodbus paho-mqtt
 ```
 
 Service hardening

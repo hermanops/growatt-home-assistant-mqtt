@@ -25,6 +25,7 @@ def mqtt_setup(cfg):
         print("MQTT enabled but paho-mqtt not installed; continuing without MQTT.")
         return None
 
+    mqtt_inverter_names(cfg)
     host = cfg.get('mqtt', 'host', fallback='127.0.0.1')
     port = cfg.getint('mqtt', 'port', fallback=1883)
     username = cfg.get('mqtt', 'username', fallback=None)
@@ -93,6 +94,14 @@ FIELD_MAP = {
 }
 
 
+def mqtt_inverter_names(cfg):
+    names = [section[10:] for section in cfg.sections() if section.startswith('inverters.')]
+    for name in names:
+        if not name or any(char in name for char in '/+#\0'):
+            raise ValueError(f"Invalid inverter name {name!r}: must be a non-empty MQTT topic level")
+    return names
+
+
 def mqtt_publish_discovery(client, cfg):
     """Publish HA MQTT Discovery for all sensors."""
     if not client or not cfg.getboolean('mqtt', 'ha_discovery', fallback=True):
@@ -100,42 +109,45 @@ def mqtt_publish_discovery(client, cfg):
 
     base = cfg.get('mqtt', 'base_topic', fallback='solar/inverter').rstrip('/')
     prefix = cfg.get('mqtt', 'ha_prefix', fallback='homeassistant').rstrip('/')
-    device_id = cfg.get('mqtt', 'device_id', fallback='solar_inverter')
+    device_id_base = cfg.get('mqtt', 'device_id', fallback='solar_inverter')
     device_name = cfg.get('mqtt', 'device_name', fallback='Solar Inverter')
     avail_topic = f"{base}/availability"
 
-    device = {
-        "identifiers": [device_id],
-        "manufacturer": "Growatt",
-        "model": "1000S",
-        "name": device_name,
-    }
-
-    for suffix, (name, uom, dev_class, state_class) in SENSOR_DEFS.items():
-        uid = f"{device_id}_{suffix}"
-        cfg_topic = f"{prefix}/sensor/{uid}/config"
-        state_topic = f"{base}/{suffix}"
-
-        payload = {
-            "name": name,
-            "unique_id": uid,
-            "state_topic": state_topic,
-            "availability_topic": avail_topic,
-            "payload_available": "online",
-            "payload_not_available": "offline",
-            "device": device,
+    for inverter_name in mqtt_inverter_names(cfg):
+        # Hex encoding keeps names reversible and avoids discovery ID collisions.
+        device_id = f"{device_id_base}_{inverter_name.encode('utf-8').hex()}"
+        device = {
+            "identifiers": [device_id],
+            "manufacturer": "Growatt",
+            "model": "1000S",
+            "name": f"{device_name} {inverter_name}",
         }
-        if uom:
-            payload["unit_of_measurement"] = uom
-        if dev_class:
-            payload["device_class"] = dev_class
-        if state_class:
-            payload["state_class"] = state_class
 
-        client.publish(cfg_topic, json.dumps(payload), qos=0, retain=True)
+        for suffix, (name, uom, dev_class, state_class) in SENSOR_DEFS.items():
+            uid = f"{device_id}_{suffix}"
+            cfg_topic = f"{prefix}/sensor/{uid}/config"
+            state_topic = f"{base}/{inverter_name}/{suffix}"
+
+            payload = {
+                "name": name,
+                "unique_id": uid,
+                "state_topic": state_topic,
+                "availability_topic": avail_topic,
+                "payload_available": "online",
+                "payload_not_available": "offline",
+                "device": device,
+            }
+            if uom:
+                payload["unit_of_measurement"] = uom
+            if dev_class:
+                payload["device_class"] = dev_class
+            if state_class:
+                payload["state_class"] = state_class
+
+            client.publish(cfg_topic, json.dumps(payload), qos=0, retain=True)
 
 
-def mqtt_publish_values(client, cfg, info):
+def mqtt_publish_values(client, cfg, inverter_name, info):
     """Publish all sensor values from a Growatt read."""
     if not client or not info:
         return
@@ -149,7 +161,7 @@ def mqtt_publish_values(client, cfg, info):
             continue
         try:
             payload = formatter(val)
-            client.publish(f"{base}/{suffix}", payload, qos=0, retain=retain)
+            client.publish(f"{base}/{inverter_name}/{suffix}", payload, qos=0, retain=retain)
         except Exception:
             continue
 
@@ -223,7 +235,7 @@ def main(config_path=None):
                 online = True
 
                 if mqtt_client:
-                    mqtt_publish_values(mqtt_client, settings, info)
+                    mqtt_publish_values(mqtt_client, settings, inverter['name'], info)
 
             except Exception as err:
                 print(growatt.name)

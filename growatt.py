@@ -50,26 +50,45 @@ except Exception:
 # Helpers for register decoding
 # ---------------------------------------------------------------------------
 
-def read_single(row, index, scale=10):
+def _to_signed16(value):
+    """Two's-complement conversion of an unsigned 16-bit register value."""
+    value = int(value)
+    return value - 65536 if value >= 32768 else value
+
+
+def _to_signed32(value):
+    """Two's-complement conversion of an unsigned 32-bit value."""
+    value = int(value)
+    return value - 4294967296 if value >= 2147483648 else value
+
+
+def read_single(row, index, scale=10, signed=False):
     """
     Read a single 16-bit register with a default scale of 0.1 (scale=10).
     Pass scale=1 for raw integer, scale=100 for 0.01, etc.
+    Pass signed=True for fields that can go negative (e.g. temperature).
     """
     try:
-        return row.registers[index] / float(scale)
+        val = int(row.registers[index])
+        if signed:
+            val = _to_signed16(val)
+        return val / float(scale)
     except Exception:
         return None
 
 
-def read_double(row, index, scale=10):
+def read_double(row, index, scale=10, signed=False):
     """
     Read a 32-bit value composed of two 16-bit registers (index, index+1).
     Default scale 0.1 (scale=10).
+    Pass signed=True for fields that can go negative (e.g. AC power).
     """
     try:
         hi = int(row.registers[index])
         lo = int(row.registers[index + 1])
         val = (hi << 16) | lo
+        if signed:
+            val = _to_signed32(val)
         return val / float(scale)
     except Exception:
         return None
@@ -162,21 +181,21 @@ class Growatt:
             'Vpv2': read_single(row, 7),            # V (0.1)
             'PV2Curr': read_single(row, 8),         # A (0.1)
             'PV2Watt': read_double(row, 9),         # W (0.1)
-            'Pac': read_double(row, 11),            # W (0.1)
+            'Pac': read_double(row, 11, signed=True),     # W (0.1), signed (export)
             'Fac': read_single(row, 13, 100),       # Hz (0.01)
             'Vac1': read_single(row, 14),           # V (0.1)
-            'Iac1': read_single(row, 15),           # A (0.1)
-            'Pac1': read_double(row, 16),           # W (0.1)
+            'Iac1': read_single(row, 15, signed=True),    # A (0.1), signed
+            'Pac1': read_double(row, 16, signed=True),    # W (0.1), signed (export)
             'Vac2': read_single(row, 18),           # V (0.1)
-            'Iac2': read_single(row, 19),           # A (0.1)
-            'Pac2': read_double(row, 20),           # W (0.1)
+            'Iac2': read_single(row, 19, signed=True),    # A (0.1), signed
+            'Pac2': read_double(row, 20, signed=True),    # W (0.1), signed (export)
             'Vac3': read_single(row, 22),           # V (0.1)
-            'Iac3': read_single(row, 23),           # A (0.1)
-            'Pac3': read_double(row, 24),           # W (0.1)
+            'Iac3': read_single(row, 23, signed=True),    # A (0.1), signed
+            'Pac3': read_double(row, 24, signed=True),    # W (0.1), signed (export)
             'EnergyToday': read_double(row, 26),    # kWh (0.1)
             'EnergyTotal': read_double(row, 28),    # kWh (0.1)
             'TimeTotal': read_double(row, 30, 2),   # hours? (scale 2 in original)
-            'Temp': read_single(row, 32),           # °C (0.1)
+            'Temp': read_single(row, 32, signed=True),    # °C (0.1), signed
         }
 
         # ---- Block 33..40 (fault values + code) ----
@@ -190,7 +209,7 @@ class Growatt:
                 'VpvFault': read_single(row, 3),
                 'VavFault': read_single(row, 4),
                 'FacFault': read_single(row, 5, 100),
-                'TempFault': read_single(row, 6),
+                'TempFault': read_single(row, 6, signed=True),  # °C (0.1), signed
                 'FaultCode': fault_code,
                 'Fault': ErrorCodes.get(fault_code, str(fault_code)),
             })

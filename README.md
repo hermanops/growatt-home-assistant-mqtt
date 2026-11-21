@@ -1,13 +1,13 @@
-Solarmon
+Growatt Home Assistant MQTT
 ----
-A simple Python Script for reading Growatt PV Inverter Modbus RS485 RTU Protocol and publishing telemetry via MQTT
+A Python application (Solarmon) that reads Growatt PV inverters over RS485/Modbus RTU and publishes telemetry to MQTT, with optional Home Assistant MQTT discovery.
 
 [Protocol Documentation](docs/README.md)
 
 How to use
 ----
-- Some hardware running a Linux based OS with Python 3.9+ (eg. Raspberry Pi)
-- Connect your Linux based OS to the RS485 port on the inverter via a RS485 to USB cable
+- A Linux-based host running Python 3.9+ (for example, a Raspberry Pi)
+- Connect the host to the inverter's RS485 port with an RS485-to-USB adapter
 - Copy `solarmon.cfg.example` to `solarmon.cfg` and modify the config values to your setup as needed
 - Install as a systemd service (recommended): see [Installation](#installation-raspberry-pi--debian)
 - For a quick test without the service:
@@ -28,7 +28,7 @@ Telemetry is published to MQTT only; configure the `[mqtt]` section in `solarmon
 
 | Key | Default | Description |
 |---|---|---|
-| `enable` | `false` | Enable MQTT publishing |
+| `enable` | `false` | Enable MQTT publishing; the example config sets this to `true` |
 | `host` / `port` | `127.0.0.1` / `1883` | Broker address |
 | `username` / `password` | – | Broker credentials (optional) |
 | `base_topic` | `solar/inverter` | State topics are `<base_topic>/<inverter name>/<sensor>`; shared availability on `<base_topic>/availability` |
@@ -106,7 +106,7 @@ service start; updates arrive as Dependabot PRs and are applied with
 # Host: solarmon (Pi)
 apt install -y git python3-venv
 usermod -aG dialout pi                        # serial port access
-sudo -u pi git clone https://github.com/hermanops/solarmon-new /home/pi/solarmon
+sudo -u pi git clone https://github.com/hermanops/growatt-home-assistant-mqtt /home/pi/solarmon
 cd /home/pi/solarmon
 sudo -u pi cp solarmon.cfg.example solarmon.cfg
 sudo -u pi nano solarmon.cfg                  # port, unit, MQTT settings

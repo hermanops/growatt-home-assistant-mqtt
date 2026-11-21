@@ -1,4 +1,4 @@
-# Solarmon repository instructions
+# Growatt Home Assistant MQTT repository instructions
 
 ## Development and validation
 
@@ -37,7 +37,7 @@
 
 ## GitHub and pull requests
 
-- The repository is `hermanops/solarmon-new`; target pull requests to `master`.
+- The repository is `hermanops/growatt-home-assistant-mqtt`; target pull requests to `master`.
 - Do not assume a fork or a second remote account is the branch owner. Inspect remotes and explicitly use the repository owner/head branch when pushing or creating a PR.
 - Before opening or updating a PR, check whether a PR already exists for the current branch.
 - When addressing PR review comments, verify the comment's exact request and the relevant CI evidence. Fix code when requested, reply with evidence when no change is needed, and resolve only the addressed thread.

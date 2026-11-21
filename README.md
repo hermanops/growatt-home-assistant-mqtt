@@ -37,6 +37,10 @@ Telemetry is published to MQTT only; configure the `[mqtt]` section in `solarmon
 | `ha_prefix` | `homeassistant` | HA discovery prefix |
 | `device_id` / `device_name` | `solar_inverter` / `Solar Inverter` | HA device identity |
 
+The `fault` and `fault_code` sensors report the decoded fault description and
+numeric code. They update only when the fault register block is read
+successfully; retained values may otherwise be stale.
+
 Home Assistant discovery configs are retained independently of the `retain` setting.
 Renaming or removing a sensor does not remove its old discovery config, so its
 entity may remain in Home Assistant. To remove it, use an MQTT client to publish

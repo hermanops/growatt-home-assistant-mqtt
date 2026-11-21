@@ -100,12 +100,22 @@ If your paths or user differ, edit `User`, `Group`, `WorkingDirectory` and
 Updating
 ----
 ```bash
-# Host: solarmon (Pi)
+# Host: solarmon (Pi), as user pi (not root)
 /home/pi/solarmon/scripts/update.sh
 ```
-The script does a fast-forward `git pull` as `pi`, syncs the venv with
-`requirements.txt`, installs `solarmon.service` again if it changed, and
-restarts the service. Set `APP_DIR` / `APP_USER` to override the defaults.
+The script does a fast-forward `git pull`, syncs the venv with
+`requirements.txt`, and restarts the service with `sudo systemctl restart`.
+It refuses to run as root and never installs the systemd unit: the checkout
+is writable by `pi`, so installing its unit as root would let `pi` gain root.
+If `solarmon.service` changed, the script shows the diff and the `install`
+command; review the diff and run that command as root.
+
+If `pi` has no general sudo rights, allow only the restart:
+```bash
+# Host: solarmon (Pi), as root
+echo 'pi ALL=(root) NOPASSWD: /usr/bin/systemctl restart solarmon.service, /bin/systemctl restart solarmon.service' \
+  > /etc/sudoers.d/solarmon && chmod 0440 /etc/sudoers.d/solarmon && visudo -c
+```
 
 Migrating from the old unit (pip at every start)
 ----
@@ -132,7 +142,7 @@ Service hardening
 `solarmon.service` uses systemd sandboxing: read-only filesystem
 (`ProtectSystem=strict`, `ProtectHome=read-only`), no capabilities, a
 syscall filter, IPv4/IPv6/Unix sockets only, and device access limited to
-serial devices (`ttyUSB*`, `ttyAMA*`, `ttyS*`). If the serial port does not
+serial device groups from `/proc/devices` (`ttyUSB*`, `ttyACM*`, `ttyAMA*`, `ttyS*`). If the serial port does not
 open (`Permission denied` / `Operation not permitted`), check the device with
 `ls -l /dev/serial*` and adjust the `DeviceAllow=` lines.
 

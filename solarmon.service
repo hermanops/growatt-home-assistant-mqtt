@@ -12,7 +12,8 @@ Group=pi
 SupplementaryGroups=dialout
 WorkingDirectory=/home/pi/solarmon
 # Deps live in a venv owned by pi (see README). No install at start:
-# use scripts/update.sh after a git pull.
+# run scripts/update.sh as pi after a git pull. If you change User=,
+# WorkingDirectory= or ExecStart= paths, edit this file before installing.
 ExecStart=/home/pi/solarmon/.venv/bin/python -u solarmon.py
 Restart=on-failure
 RestartSec=10
@@ -43,9 +44,13 @@ SystemCallArchitectures=native
 SystemCallFilter=@system-service
 SystemCallFilter=~@privileged @resources
 UMask=0027
-# Serial access only (USB adapter, Pi UART, 8250 UART)
+# Serial access only. Entries are device *groups* from /proc/devices
+# (major numbers), not node names: char-ttyUSB covers ttyUSB0, ttyUSB1, ...
+# ttyUSB = USB serial (FTDI/CH340/CP210x), ttyACM = USB CDC-ACM,
+# ttyAMA = Pi PL011 UART, ttyS = 8250/mini UART.
 DevicePolicy=closed
 DeviceAllow=char-ttyUSB rw
+DeviceAllow=char-ttyACM rw
 DeviceAllow=char-ttyAMA rw
 DeviceAllow=char-ttyS rw
 

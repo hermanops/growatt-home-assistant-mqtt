@@ -69,7 +69,7 @@ SENSOR_DEFS = {
     "ac_current":         ("AC Current",         "A",   "current",     "measurement"),
     "grid_frequency":     ("Grid Frequency",     "Hz",  "frequency",   "measurement"),
     "inverter_temp":      ("Inverter Temperature","°C", "temperature", "measurement"),
-    "energy_today":       ("Energy Today",       "kWh", "energy",      "total"),
+    "energy_today":       ("Energy Today",       "kWh", "energy",      "total_increasing"),
     "energy_total":       ("Energy Total",       "kWh", "energy",      "total_increasing"),
     "inverter_status":    ("Inverter Status",    None,  None,          None),
     "inverter_status_code":("Inverter Status Code",None, None,         None),

@@ -31,7 +31,7 @@ Telemetry is published to MQTT only; configure the `[mqtt]` section in `solarmon
 | `enable` | `false` | Enable MQTT publishing |
 | `host` / `port` | `127.0.0.1` / `1883` | Broker address |
 | `username` / `password` | – | Broker credentials (optional) |
-| `base_topic` | `solar/inverter` | State topics are `<base_topic>/<inverter name>/<sensor>`; service availability on `<base_topic>/availability` |
+| `base_topic` | `solar/inverter` | State topics are `<base_topic>/<inverter name>/<sensor>`; shared availability on `<base_topic>/availability` |
 | `retain` | `true` | Retain state messages |
 | `ha_discovery` | `true` | Publish Home Assistant MQTT discovery configs |
 | `ha_prefix` | `homeassistant` | HA discovery prefix |
@@ -39,8 +39,13 @@ Telemetry is published to MQTT only; configure the `[mqtt]` section in `solarmon
 
 Each `[inverters.<name>]` section has its own MQTT state topics and Home
 Assistant device. The name must be non-empty and cannot contain `/`, `+`, `#`
-or a null character. Availability still indicates the MQTT service connection,
-not whether a particular inverter is responding.
+or a null character. The shared retained availability topic starts `offline`
+until a poll succeeds, then is `online` if at least one inverter responds in
+the latest poll cycle, or `offline` if none do. On MQTT reconnect the latest
+polling status is republished; the MQTT last will also reports `offline` on
+an unexpected disconnect. Home Assistant marks the sensors unavailable when
+offline. Availability is shared, not per inverter: if one inverter responds,
+the others' retained sensor values may be stale.
 
 **Migration:** State topics now include the inverter name, even for one
 inverter; update any MQTT subscribers using the old topics. Home Assistant

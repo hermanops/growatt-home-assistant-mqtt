@@ -31,18 +31,33 @@ Telemetry is published to MQTT only; configure the `[mqtt]` section in `solarmon
 | `enable` | `false` | Enable MQTT publishing |
 | `host` / `port` | `127.0.0.1` / `1883` | Broker address |
 | `username` / `password` | – | Broker credentials (optional) |
-| `base_topic` | `solar/inverter` | State topics are `<base_topic>/<sensor>`; availability on `<base_topic>/availability` |
+| `base_topic` | `solar/inverter` | State topics are `<base_topic>/<inverter name>/<sensor>`; service availability on `<base_topic>/availability` |
 | `retain` | `true` | Retain state messages |
 | `ha_discovery` | `true` | Publish Home Assistant MQTT discovery configs |
 | `ha_prefix` | `homeassistant` | HA discovery prefix |
-| `device_id` / `device_name` | `solar_inverter` / `Solar Inverter` | HA device identity |
+| `device_id` / `device_name` | `solar_inverter` / `Solar Inverter` | Base for per-inverter HA device identities and names |
+
+Each `[inverters.<name>]` section has its own MQTT state topics and Home
+Assistant device. The name must be non-empty and cannot contain `/`, `+`, `#`
+or a null character. Availability still indicates the MQTT service connection,
+not whether a particular inverter is responding.
+
+**Migration:** State topics now include the inverter name, even for one
+inverter; update any MQTT subscribers using the old topics. Home Assistant
+discovers new devices and entities, so dashboards and automations using the old
+entities must be updated. Remove old retained discovery configs as described
+below; old retained state values at `<base_topic>/<sensor>` may also be
+removed by publishing an empty retained message to each old state topic.
 
 Home Assistant discovery configs are retained independently of the `retain` setting.
 Renaming or removing a sensor does not remove its old discovery config, so its
 entity may remain in Home Assistant. To remove it, use an MQTT client to publish
 an empty retained message to the old discovery topic:
-`<ha_prefix>/sensor/<device_id>_<old_sensor_suffix>/config`. Use the old
-`ha_prefix` and `device_id` if those have also changed.
+`<ha_prefix>/sensor/<device_id>_<encoded_inverter_name>_<old_sensor_suffix>/config`.
+The inverter name is encoded as UTF-8 bytes in hexadecimal (for example,
+`roof` becomes `726f6f66`). For discovery configs created before this change,
+the topic is `<ha_prefix>/sensor/<device_id>_<old_sensor_suffix>/config`.
+Use the old `ha_prefix` and `device_id` if those have also changed.
 
 With paho-mqtt 2.x, specify the callback API version when creating a client.
 Omitting it uses the deprecated VERSION1 API and emits a deprecation warning.

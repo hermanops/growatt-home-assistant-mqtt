@@ -4,6 +4,7 @@ import time
 import os
 import json
 import socket
+import logging
 
 from configparser import RawConfigParser
 from pymodbus.client import ModbusSerialClient as ModbusClient
@@ -162,6 +163,11 @@ settings.read(os.path.dirname(os.path.realpath(__file__)) + '/solarmon.cfg')
 interval = settings.getint('query', 'interval', fallback=1)
 offline_interval = settings.getint('query', 'offline_interval', fallback=60)
 error_interval = settings.getint('query', 'error_interval', fallback=60)
+
+# pymodbus log level. WARNING shows e.g. "Cleanup recv buffer before send" at
+# dawn/dusk when the inverter powers its RS485 transceiver on/off (harmless).
+logging.getLogger('pymodbus').setLevel(
+    settings.get('solarmon', 'modbus_log_level', fallback='WARNING').upper())
 
 # Serial connection
 print('Setup Serial Connection... ', end='')

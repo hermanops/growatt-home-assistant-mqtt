@@ -9,8 +9,13 @@ How to use
 - Some hardware running a Linux based OS with Python 3.9+ (eg. Raspberry Pi)
 - Connect your Linux based OS to the RS485 port on the inverter via a RS485 to USB cable
 - Copy `solarmon.cfg.example` to `solarmon.cfg` and modify the config values to your setup as needed
-- Run `pip install -r requirements.txt`
-- Run `python3 solarmon.py` in a screen (or you could setup a service if that is your preference)
+- Install as a systemd service (recommended): see [Installation](#installation-raspberry-pi--debian)
+- For a quick test without the service:
+  ```bash
+  python3 -m venv .venv
+  .venv/bin/pip install -r requirements.txt
+  .venv/bin/python solarmon.py
+  ```
 
 MQTT / Home Assistant
 ----
@@ -61,10 +66,113 @@ unit = 2
 
 Use your MQTT broker and client (for example Home Assistant MQTT discovery) to view inverter telemetry.
 
-Systemd Service
----
-- Copy `solarmon.service` to `/etc/systemd/system`
-- Modify the `WorkingDirectory` and `User` to suit your setup.
-- Run `systemctl start solarmon` to start the service.
-- Run `systemctl status solarmon` and ensure that the service is running correctly.
-- Run `systemctl enable solarmon` to make the service automatically start when the system does.
+Installation (Raspberry Pi / Debian)
+----
+The service runs as `pi` from a virtualenv owned by `pi`. Dependencies are
+pinned in `requirements.txt` and are **never** installed automatically at
+service start; updates arrive as Dependabot PRs and are applied with
+`scripts/update.sh`. Commands below run on the Pi as root.
+
+```bash
+# Host: solarmon (Pi)
+apt install -y git python3-venv
+usermod -aG dialout pi                        # serial port access
+sudo -u pi git clone https://github.com/hermanops/solarmon-new /home/pi/solarmon
+cd /home/pi/solarmon
+sudo -u pi cp solarmon.cfg.example solarmon.cfg
+sudo -u pi nano solarmon.cfg                  # port, unit, MQTT settings
+chmod 0640 solarmon.cfg                       # contains MQTT credentials
+
+sudo -u pi python3 -m venv .venv
+sudo -u pi .venv/bin/pip install --disable-pip-version-check -r requirements.txt
+sudo -u pi .venv/bin/python -c "import pymodbus, serial, paho.mqtt; print(pymodbus.__version__)"
+
+install -m 0644 solarmon.service /etc/systemd/system/solarmon.service
+systemctl daemon-reload
+systemctl enable --now solarmon
+systemctl status solarmon --no-pager
+systemd-analyze security solarmon | tail -1
+```
+
+If your paths or user differ, edit `User`, `Group`, `WorkingDirectory` and
+`ExecStart` in `solarmon.service` before you install it.
+
+Updating
+----
+```bash
+# Host: solarmon (Pi), as user pi (not root)
+/home/pi/solarmon/scripts/update.sh
+```
+The script does a fast-forward `git pull`, syncs the venv with
+`requirements.txt`, and restarts the service with `sudo systemctl restart`.
+It refuses to run as root and never installs the systemd unit: the checkout
+is writable by `pi`, so installing its unit as root would let `pi` gain root.
+If `solarmon.service` changed, the script shows the diff and the `install`
+command; review the diff and run that command as root.
+
+If `pi` has no general sudo rights, allow only the restart:
+```bash
+# Host: solarmon (Pi), as root
+echo 'pi ALL=(root) NOPASSWD: /usr/bin/systemctl restart solarmon.service, /bin/systemctl restart solarmon.service' \
+  > /etc/sudoers.d/solarmon && chmod 0440 /etc/sudoers.d/solarmon && visudo -c
+```
+
+Migrating from the old unit (pip at every start)
+----
+Older versions of `solarmon.service` ran `pip install` as root in
+`ExecStartPre` on every start. To migrate:
+
+```bash
+# Host: solarmon (Pi)
+cd /home/pi/solarmon
+chown -R pi:pi /home/pi/solarmon              # if git was ever run as root
+sudo -u pi git pull --ff-only
+sudo -u pi python3 -m venv .venv
+sudo -u pi .venv/bin/pip install --disable-pip-version-check -r requirements.txt
+install -m 0644 solarmon.service /etc/systemd/system/solarmon.service
+ls -l /etc/systemd/system/solarmon.service.d/ 2>/dev/null  # inspect drop-ins first
+systemctl daemon-reload
+systemctl restart solarmon
+systemctl cat solarmon                        # check the effective unit
+```
+
+Drop-ins in `/etc/systemd/system/solarmon.service.d/` override the new unit.
+Remove only a legacy drop-in that you no longer need, for example an
+`override.conf` that only sets `WatchdogSec=0`, `Type=simple` or
+`NotifyAccess=none`:
+```bash
+# Host: solarmon (Pi), as root
+cat /etc/systemd/system/solarmon.service.d/override.conf
+rm /etc/systemd/system/solarmon.service.d/override.conf
+systemctl daemon-reload && systemctl restart solarmon
+```
+
+The old unit installed `pymodbus` and `paho-mqtt` with root pip into the
+system interpreter. The new service does not use them. Leaving them installed
+is safe. Remove them only if they are in `/usr/local` (installed by pip, not
+by apt) and no other application on the host uses them:
+```bash
+# Host: solarmon (Pi), as root
+python3 -m pip show pymodbus paho-mqtt | grep -E '^(Name|Location|Required-by)'
+# Only if Location is /usr/local/... and Required-by is empty:
+python3 -m pip uninstall pymodbus paho-mqtt
+```
+
+Service hardening
+----
+`solarmon.service` uses systemd sandboxing: read-only filesystem
+(`ProtectSystem=strict`, `ProtectHome=read-only`), no capabilities, a
+syscall filter, IPv4/IPv6/Unix sockets only, and device access limited to
+serial device groups from `/proc/devices` (`ttyUSB*`, `ttyACM*`, `ttyAMA*`, `ttyS*`). If the serial port does not
+open (`Permission denied` / `Operation not permitted`), check the device with
+`ls -l /dev/serial*` and adjust the `DeviceAllow=` lines.
+
+Troubleshooting
+----
+- `Cleanup recv buffer before send: 0x0 0x0 ...` around sunrise and sunset is
+  harmless: the inverter powers its RS485 transceiver on/off and leaves null
+  bytes on the line. pymodbus discards them. To hide these warnings, set
+  `modbus_log_level = ERROR` in the `[solarmon]` section. If you see them at
+  midday, check RS485 termination (120 Ω) and bias resistors.
+- At night the inverter has no power and does not answer; this is expected.
+- Follow the log: `journalctl -u solarmon -f`

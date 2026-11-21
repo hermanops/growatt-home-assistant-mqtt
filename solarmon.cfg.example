@@ -5,6 +5,8 @@ error_interval = 60
 
 [solarmon]
 port = /dev/ttyUSB0
+# pymodbus log level: DEBUG, INFO, WARNING (default), ERROR
+# modbus_log_level = ERROR
 
 [inverters.main]
 unit = 1

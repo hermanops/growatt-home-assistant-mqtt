@@ -2,8 +2,10 @@ import json
 import tempfile
 import unittest
 from configparser import RawConfigParser
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+import growatt
 import solarmon
 
 
@@ -84,6 +86,44 @@ class SolarmonTests(unittest.TestCase):
         self.assertEqual(discovery['state_class'], 'measurement')
         self.assertEqual(qos, 0)
         self.assertTrue(retain)
+
+    def test_decoded_fault_values_are_published(self):
+        cfg = RawConfigParser()
+        serial = Mock()
+        serial.read_holding_registers.return_value.isError.return_value = False
+        serial.read_holding_registers.return_value.registers = [1]
+        inverter = growatt.Growatt(serial, 'main', 1)
+
+        for code, text in ((0, 'None'), (29, 'AC Voltage Outrange'), (999, '999')):
+            with self.subTest(code=code):
+                core = SimpleNamespace(registers=[0] * 33)
+                fault = SimpleNamespace(registers=[0] * 7 + [code, 0])
+                with patch.object(growatt, '_read_input_safe', side_effect=[core, fault, None, None]):
+                    info = inverter.read()
+                client = RecordingClient()
+                solarmon.mqtt_publish_values(client, cfg, 'main', info)
+
+                self.assertIn(('solar/inverter/main/fault', text, 0, True), client.published)
+                self.assertIn(('solar/inverter/main/fault_code', str(code), 0, True), client.published)
+
+    def test_fault_discovery_matches_state_topics(self):
+        cfg = RawConfigParser()
+        cfg.read_dict({'inverters.main': {'unit': '1'}})
+        client = RecordingClient()
+        solarmon.mqtt_publish_discovery(client, cfg)
+
+        discovery = {topic: json.loads(payload) for topic, payload, _, _ in client.published}
+        for suffix in ('fault', 'fault_code'):
+            with self.subTest(suffix=suffix):
+                topic = f'homeassistant/sensor/solar_inverter_6d61696e_{suffix}/config'
+                self.assertEqual(discovery[topic]['state_topic'], f'solar/inverter/main/{suffix}')
+                self.assertNotIn('state_class', discovery[topic])
+
+    def test_missing_fault_values_are_not_published(self):
+        client = RecordingClient()
+        solarmon.mqtt_publish_values(client, RawConfigParser(), 'main', {'Pac': 42})
+        self.assertNotIn('solar/inverter/main/fault', [topic for topic, _, _, _ in client.published])
+        self.assertNotIn('solar/inverter/main/fault_code', [topic for topic, _, _, _ in client.published])
 
     def test_multiple_inverters_have_distinct_state_and_discovery(self):
         cfg = RawConfigParser()

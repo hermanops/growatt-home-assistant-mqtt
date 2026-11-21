@@ -49,6 +49,10 @@ entities must be updated. Remove old retained discovery configs as described
 below; old retained state values at `<base_topic>/<sensor>` may also be
 removed by publishing an empty retained message to each old state topic.
 
+The `fault` and `fault_code` sensors report the decoded fault description and
+numeric code. They update only when the fault register block is read
+successfully; retained values may otherwise be stale.
+
 Home Assistant discovery configs are retained independently of the `retain` setting.
 Renaming or removing a sensor does not remove its old discovery config, so its
 entity may remain in Home Assistant. To remove it, use an MQTT client to publish

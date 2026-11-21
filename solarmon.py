@@ -75,6 +75,8 @@ SENSOR_DEFS = {
     "energy_total":       ("Energy Total",       "kWh", "energy",      "total_increasing"),
     "inverter_status":    ("Inverter Status",    None,  None,          None),
     "inverter_status_code":("Inverter Status Code",None, None,         None),
+    "fault":              ("Inverter Fault",     None,  None,          None),
+    "fault_code":         ("Inverter Fault Code",None,  None,          None),
 }
 
 # Modbus field -> (topic_suffix, formatter)
@@ -91,6 +93,8 @@ FIELD_MAP = {
     "EnergyTotal":("energy_total",       lambda v: f"{float(v):.3f}"),
     "Status":     ("inverter_status",    lambda v: str(v)),
     "StatusCode": ("inverter_status_code",lambda v: str(int(v))),
+    "Fault":      ("fault",              lambda v: str(v)),
+    "FaultCode":  ("fault_code",         lambda v: str(int(v))),
 }
 
 

@@ -60,7 +60,8 @@ def mqtt_setup(cfg):
 
     # LWT / availability
     avail_topic = f"{base}/availability"
-    client.will_set(avail_topic, payload="offline", qos=0, retain=True)
+    service_topic = f"{base}/service"
+    client.will_set(service_topic, payload="offline", qos=0, retain=True)
     client.solarmon_availability = MqttAvailability(client, avail_topic)
 
     def on_connect(c, userdata, flags, reason_code, properties):
@@ -68,6 +69,7 @@ def mqtt_setup(cfg):
             print(f"MQTT connect failed: {reason_code}")
             return
         client.solarmon_availability.publish()
+        c.publish(service_topic, "online", qos=0, retain=True)
         mqtt_publish_discovery(c, cfg)
 
     client.on_connect = on_connect
@@ -137,6 +139,7 @@ def mqtt_publish_discovery(client, cfg):
     device_id_base = cfg.get('mqtt', 'device_id', fallback='solar_inverter')
     device_name = cfg.get('mqtt', 'device_name', fallback='Solar Inverter')
     avail_topic = f"{base}/availability"
+    service_topic = f"{base}/service"
 
     for inverter_name in mqtt_inverter_names(cfg):
         # Hex encoding keeps names reversible and avoids discovery ID collisions.
@@ -152,16 +155,34 @@ def mqtt_publish_discovery(client, cfg):
             uid = f"{device_id}_{suffix}"
             cfg_topic = f"{prefix}/sensor/{uid}/config"
             state_topic = f"{base}/{inverter_name}/{suffix}"
-
             payload = {
                 "name": name,
                 "unique_id": uid,
                 "state_topic": state_topic,
-                "availability_topic": avail_topic,
-                "payload_available": "online",
-                "payload_not_available": "offline",
                 "device": device,
             }
+            if suffix in ("power", "pv_power", "pv1_current", "energy_today", "energy_total"):
+                payload.update({
+                    "availability_topic": service_topic,
+                    "payload_available": "online",
+                    "payload_not_available": "offline",
+                })
+            else:
+                payload.update({
+                    "availability": [
+                        {
+                            "topic": service_topic,
+                            "payload_available": "online",
+                            "payload_not_available": "offline",
+                        },
+                        {
+                            "topic": avail_topic,
+                            "payload_available": "online",
+                            "payload_not_available": "offline",
+                        },
+                    ],
+                    "availability_mode": "all",
+                })
             if uom:
                 payload["unit_of_measurement"] = uom
             if dev_class:
@@ -266,19 +287,26 @@ def main(config_path=None):
             growatt = inverter['growatt']
             try:
                 info = growatt.read()
-
-                if info is None:
-                    continue
-
-                online = True
-
-                if mqtt_client:
-                    mqtt_publish_values(mqtt_client, settings, inverter['name'], info)
-
             except Exception as err:
                 print(growatt.name)
                 print(err)
                 inverter['error_until'] = time.monotonic() + error_interval
+                info = None
+
+            if info is None:
+                if mqtt_client:
+                    mqtt_publish_values(
+                        mqtt_client, settings, inverter['name'], {
+                            'Pac': 0,
+                            'Ppv': 0,
+                            'PV1Curr': 0,
+                        })
+                continue
+
+            online = True
+
+            if mqtt_client:
+                mqtt_publish_values(mqtt_client, settings, inverter['name'], info)
 
         if mqtt_client:
             mqtt_client.solarmon_availability.set_online(online)

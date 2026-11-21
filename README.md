@@ -4,6 +4,10 @@ A Python application (Solarmon) that reads Growatt PV inverters over RS485/Modbu
 
 [Protocol Documentation](docs/README.md)
 
+Releases follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html); see
+[CHANGELOG.md](CHANGELOG.md) for what changed and [RELEASING.md](RELEASING.md)
+for how releases are cut.
+
 The instructions below are for a fresh install. If you ran an older version of
 this repo, see [MIGRATION.md](MIGRATION.md) first.
 

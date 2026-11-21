@@ -1,4 +1,5 @@
 import json
+import os
 import tempfile
 import unittest
 from configparser import RawConfigParser
@@ -26,6 +27,30 @@ class SolarmonTests(unittest.TestCase):
             settings = solarmon.load_settings(config_file.name)
 
         self.assertEqual(settings.getint('query', 'interval'), 5)
+
+    def test_load_settings_missing_file_fails_fast(self):
+        missing = os.path.join(tempfile.mkdtemp(), 'nope.cfg')
+
+        with self.assertRaises(SystemExit) as ctx:
+            solarmon.load_settings(missing)
+
+        self.assertIn(missing, str(ctx.exception))
+
+    def test_load_settings_default_path_missing_file_fails_fast(self):
+        with patch.object(solarmon.os.path, 'isfile', return_value=False):
+            with self.assertRaises(SystemExit) as ctx:
+                solarmon.load_settings()
+
+        self.assertIn('solarmon.cfg', str(ctx.exception))
+
+    def test_load_settings_unreadable_file_fails_fast(self):
+        with tempfile.NamedTemporaryFile(suffix='.cfg') as config_file:
+            with patch('builtins.open', side_effect=PermissionError('permission denied')):
+                with self.assertRaises(SystemExit) as ctx:
+                    solarmon.load_settings(config_file.name)
+
+        self.assertIn(config_file.name, str(ctx.exception))
+        self.assertIn('Could not read config file', str(ctx.exception))
 
     def test_main_polls_configured_inverter_and_publishes_values(self):
         cfg = RawConfigParser()

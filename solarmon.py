@@ -195,12 +195,26 @@ def mqtt_publish_values(client, cfg, inverter_name, info):
 # Main
 # ---------------------------------------------------------------------------
 def load_settings(config_path=None):
-    """Load the application config from config_path or the default config file."""
+    """Load the application config from config_path or the default config file.
+
+    Fails fast if the file is missing: RawConfigParser.read() silently ignores
+    absent files, which would leave MQTT disabled and no inverters configured.
+    """
     if config_path is None:
         config_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'solarmon.cfg')
 
+    if not os.path.isfile(config_path):
+        raise SystemExit(
+            f"Config file not found: {config_path}\n"
+            "Copy solarmon.cfg.example to solarmon.cfg and edit it."
+        )
+
     settings = RawConfigParser()
-    settings.read(config_path)
+    try:
+        with open(config_path) as config_file:
+            settings.read_file(config_file)
+    except OSError as exc:
+        raise SystemExit(f"Could not read config file: {config_path}: {exc}") from exc
     return settings
 
 

@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+#
+# Growatt 1000-S (S-series) over RS485 Modbus RTU.
+# Register map: Growatt Inverter Modbus RTU Protocol V3.04/V3.05.
+# Tested API: pymodbus 3.8.6 (Python 3.9, Debian 11). Uses `slave=`.
+# NOTE: pymodbus >=3.10 renamed `slave=` to `device_id=`.
 
 import time
 import logging
-from pymodbus.exceptions import ModbusIOException
 
 logger = logging.getLogger(__name__)
 
@@ -11,6 +15,7 @@ logger = logging.getLogger(__name__)
 # Codes
 # ---------------------------------------------------------------------------
 
+# S-series reports 0, 1 and 3 only. 2 is for storage models.
 StateCodes = {
     0: 'Waiting',
     1: 'Normal',
@@ -18,6 +23,7 @@ StateCodes = {
     3: 'Fault'
 }
 
+# Verify these texts against the protocol PDF for your firmware.
 ErrorCodes = {
     0: 'None',
     24: 'Auto Test Failed',
@@ -38,40 +44,51 @@ ErrorCodes = {
     39: 'PV Voltage Outrange',
 }
 
-# Some environments have the class in different places/versions
-try:
-    from pymodbus.pdu import ExceptionResponse
-except Exception:
-    class ExceptionResponse:  # fallback stub
-        pass
-
 
 # ---------------------------------------------------------------------------
 # Helpers for register decoding
 # ---------------------------------------------------------------------------
 
-def read_single(row, index, scale=10):
+def _to_signed16(value):
+    """Two's-complement conversion of an unsigned 16-bit register value."""
+    value = int(value)
+    return value - 65536 if value >= 32768 else value
+
+
+def _to_signed32(value):
+    """Two's-complement conversion of an unsigned 32-bit value."""
+    value = int(value)
+    return value - 4294967296 if value >= 2147483648 else value
+
+
+def read_single(row, index, scale=10, signed=False):
     """
     Read a single 16-bit register with a default scale of 0.1 (scale=10).
     Pass scale=1 for raw integer, scale=100 for 0.01, etc.
+    Pass signed=True for fields that can go negative (e.g. temperature).
     """
     try:
-        return row.registers[index] / float(scale)
-    except Exception:
+        val = int(row.registers[index])
+        if signed:
+            val = _to_signed16(val)
+        return val / float(scale)
+    except (IndexError, TypeError, ValueError, AttributeError):
         return None
 
 
-def read_double(row, index, scale=10):
+def read_double(row, index, scale=10, signed=False):
     """
     Read a 32-bit value composed of two 16-bit registers (index, index+1).
-    Default scale 0.1 (scale=10).
+    High word first (big-endian). Default scale 0.1 (scale=10).
     """
     try:
         hi = int(row.registers[index])
         lo = int(row.registers[index + 1])
         val = (hi << 16) | lo
+        if signed:
+            val = _to_signed32(val)
         return val / float(scale)
-    except Exception:
+    except (IndexError, TypeError, ValueError, AttributeError):
         return None
 
 
@@ -86,9 +103,10 @@ def merge(d1, d2):
 # ---------------------------------------------------------------------------
 
 def _resp_ok(resp):
+    """True if resp is a valid (non-error) register response."""
     return (
         resp is not None
-        and not isinstance(resp, (ModbusIOException, ExceptionResponse))
+        and not resp.isError()
         and hasattr(resp, "registers")
     )
 
@@ -98,14 +116,18 @@ def _read_input_safe(client, unit, start, count, retries=2, delay=0.05):
     Read input registers with a few quick retries.
     Returns a response with .registers or None if all attempts fail.
     """
+    last_err = None
     for _ in range(retries + 1):
         try:
             resp = client.read_input_registers(start, count=count, slave=unit)
             if _resp_ok(resp):
                 return resp
-        except Exception:
-            pass
+            last_err = resp
+        except Exception as e:  # serial/IO errors, timeouts
+            last_err = e
         time.sleep(delay)
+    logger.debug("Input read %d..%d failed after %d tries: %s",
+                 start, start + count - 1, retries + 1, last_err)
     return None
 
 
@@ -155,66 +177,67 @@ class Growatt:
         info = {
             'StatusCode': row.registers[0],
             'Status': StateCodes.get(row.registers[0], str(row.registers[0])),
-            'Ppv': read_double(row, 1),             # W (0.1)
-            'Vpv1': read_single(row, 3),            # V (0.1)
-            'PV1Curr': read_single(row, 4),         # A (0.1)
-            'PV1Watt': read_double(row, 5),         # W (0.1)
-            'Vpv2': read_single(row, 7),            # V (0.1)
-            'PV2Curr': read_single(row, 8),         # A (0.1)
-            'PV2Watt': read_double(row, 9),         # W (0.1)
-            'Pac': read_double(row, 11),            # W (0.1)
-            'Fac': read_single(row, 13, 100),       # Hz (0.01)
-            'Vac1': read_single(row, 14),           # V (0.1)
-            'Iac1': read_single(row, 15),           # A (0.1)
-            'Pac1': read_double(row, 16),           # W (0.1)
-            'Vac2': read_single(row, 18),           # V (0.1)
-            'Iac2': read_single(row, 19),           # A (0.1)
-            'Pac2': read_double(row, 20),           # W (0.1)
-            'Vac3': read_single(row, 22),           # V (0.1)
-            'Iac3': read_single(row, 23),           # A (0.1)
-            'Pac3': read_double(row, 24),           # W (0.1)
-            'EnergyToday': read_double(row, 26),    # kWh (0.1)
-            'EnergyTotal': read_double(row, 28),    # kWh (0.1)
-            'TimeTotal': read_double(row, 30, 2),   # hours? (scale 2 in original)
-            'Temp': read_single(row, 32),           # °C (0.1)
+            'Ppv': read_double(row, 1),                   # W (0.1)
+            'Vpv1': read_single(row, 3),                  # V (0.1)
+            'PV1Curr': read_single(row, 4),               # A (0.1)
+            'PV1Watt': read_double(row, 5),               # W (0.1)
+            'Vpv2': read_single(row, 7),                  # V (0.1)
+            'PV2Curr': read_single(row, 8),               # A (0.1)
+            'PV2Watt': read_double(row, 9),               # W (0.1)
+            'Pac': read_double(row, 11, signed=True),     # W (0.1)
+            'Fac': read_single(row, 13, 100),             # Hz (0.01)
+            'Vac1': read_single(row, 14),                 # V (0.1)
+            'Iac1': read_single(row, 15, signed=True),    # A (0.1)
+            'Pac1': read_double(row, 16, signed=True),    # W (0.1)
+            'Vac2': read_single(row, 18),                 # V (0.1)
+            'Iac2': read_single(row, 19, signed=True),    # A (0.1)
+            'Pac2': read_double(row, 20, signed=True),    # W (0.1)
+            'Vac3': read_single(row, 22),                 # V (0.1)
+            'Iac3': read_single(row, 23, signed=True),    # A (0.1)
+            'Pac3': read_double(row, 24, signed=True),    # W (0.1)
+            'EnergyToday': read_double(row, 26),          # kWh (0.1)
+            'EnergyTotal': read_double(row, 28),          # kWh (0.1)
+            'TimeTotal': read_double(row, 30, 7200),      # hours (raw unit 0.5 s)
+            'Temp': read_single(row, 32, signed=True),    # °C (0.1)
         }
 
-        # ---- Block 33..40 (fault values + code) ----
-        row = _read_input_safe(self.client, self.unit, 33, 8)
-        if _resp_ok(row):
+        # ---- Block 33..41 (fault values + code + IPM temp) ----
+        row = _read_input_safe(self.client, self.unit, 33, 9)
+        if row is not None:
             fault_code = row.registers[7]
             info = merge(info, {
-                'ISOFault': read_single(row, 0),
-                'GFCIFault': read_single(row, 1, 1),
-                'DCIFault': read_single(row, 2, 100),
-                'VpvFault': read_single(row, 3),
-                'VavFault': read_single(row, 4),
-                'FacFault': read_single(row, 5, 100),
-                'TempFault': read_single(row, 6),
+                'ISOFault': read_single(row, 0),                # V (0.1)
+                'GFCIFault': read_single(row, 1, 1),            # mA (1)
+                'DCIFault': read_single(row, 2, 100),           # A (0.01)
+                'VpvFault': read_single(row, 3),                # V (0.1)
+                'VavFault': read_single(row, 4),                # V (0.1) Vac fault (key kept for MQTT compat)
+                'FacFault': read_single(row, 5, 100),           # Hz (0.01)
+                'TempFault': read_single(row, 6, signed=True),  # °C (0.1)
                 'FaultCode': fault_code,
                 'Fault': ErrorCodes.get(fault_code, str(fault_code)),
+                'IPMTemp': read_single(row, 8, signed=True),    # °C (0.1)
             })
 
         # ---- Block 42..43 (bus voltages) ----
         row = _read_input_safe(self.client, self.unit, 42, 2)
-        if _resp_ok(row):
+        if row is not None:
             info = merge(info, {
-                'PBusV': read_single(row, 0),
-                'NBusV': read_single(row, 1),
+                'PBusV': read_single(row, 0),   # V (0.1)
+                'NBusV': read_single(row, 1),   # V (0.1)
             })
 
         # ---- Block 48..63 (energies & reactive) ----
         row = _read_input_safe(self.client, self.unit, 48, 16)
-        if _resp_ok(row):
+        if row is not None:
             info = merge(info, {
-                'Epv1_today': read_double(row, 0),
-                'Epv1_total': read_double(row, 2),
-                'Epv2_today': read_double(row, 4),
-                'Epv2_total': read_double(row, 6),
-                'Epv_total': read_double(row, 8),
-                'Rac': read_double(row, 10),
-                'E_rac_today': read_double(row, 12),
-                'E_rac_total': read_double(row, 14),
+                'Epv1_today': read_double(row, 0),    # kWh (0.1)
+                'Epv1_total': read_double(row, 2),    # kWh (0.1)
+                'Epv2_today': read_double(row, 4),    # kWh (0.1)
+                'Epv2_total': read_double(row, 6),    # kWh (0.1)
+                'Epv_total': read_double(row, 8),     # kWh (0.1)
+                'Rac': read_double(row, 10),          # Var (0.1)
+                'E_rac_today': read_double(row, 12),  # kVarh (0.1)
+                'E_rac_total': read_double(row, 14),  # kVarh (0.1)
             })
 
         return info

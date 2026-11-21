@@ -34,6 +34,18 @@ an empty retained message to the old discovery topic:
 `<ha_prefix>/sensor/<device_id>_<old_sensor_suffix>/config`. Use the old
 `ha_prefix` and `device_id` if those have also changed.
 
+With paho-mqtt 2.x, specify the callback API version when creating a client.
+Omitting it uses the deprecated VERSION1 API and emits a deprecation warning.
+VERSION2 callbacks have different signatures; for example, `on_connect` takes
+`(client, userdata, flags, reason_code, properties)`. Make sure callback
+signatures match the selected API version. This project already selects
+VERSION2.
+
+When upgrading this setup on Raspberry Pi OS 12 (Bookworm), Python 3.11 allows
+using pymodbus 3.10 or later. Those versions require changing the Modbus calls
+from `slave=` to `device_id=`; the current pymodbus 3.8.6 setup still uses
+`slave=`.
+
 Reading from Multiple Units
 ----
 To read from multiple units add a new section to the `solarmon.cfg` config with the unit's id.

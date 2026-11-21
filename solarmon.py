@@ -67,7 +67,7 @@ SENSOR_DEFS = {
     "pv1_current":        ("PV1 Current",        "A",   "current",     "measurement"),
     "ac_voltage":         ("AC Voltage",         "V",   "voltage",     "measurement"),
     "ac_current":         ("AC Current",         "A",   "current",     "measurement"),
-    "grid_frequency":     ("Grid Frequency",     "Hz",  None,          "measurement"),
+    "grid_frequency":     ("Grid Frequency",     "Hz",  "frequency",   "measurement"),
     "inverter_temp":      ("Inverter Temperature","°C", "temperature", "measurement"),
     "energy_today":       ("Energy Today",       "kWh", "energy",      "total"),
     "energy_total":       ("Energy Total",       "kWh", "energy",      "total_increasing"),

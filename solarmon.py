@@ -210,7 +210,11 @@ def load_settings(config_path=None):
         )
 
     settings = RawConfigParser()
-    settings.read(config_path)
+    try:
+        with open(config_path) as config_file:
+            settings.read_file(config_file)
+    except OSError as exc:
+        raise SystemExit(f"Could not read config file: {config_path}: {exc}") from exc
     return settings
 
 

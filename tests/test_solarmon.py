@@ -43,6 +43,15 @@ class SolarmonTests(unittest.TestCase):
 
         self.assertIn('solarmon.cfg', str(ctx.exception))
 
+    def test_load_settings_unreadable_file_fails_fast(self):
+        with tempfile.NamedTemporaryFile(suffix='.cfg') as config_file:
+            with patch('builtins.open', side_effect=PermissionError('permission denied')):
+                with self.assertRaises(SystemExit) as ctx:
+                    solarmon.load_settings(config_file.name)
+
+        self.assertIn(config_file.name, str(ctx.exception))
+        self.assertIn('Could not read config file', str(ctx.exception))
+
     def test_main_polls_configured_inverter_and_publishes_values(self):
         cfg = RawConfigParser()
         cfg.read_dict({

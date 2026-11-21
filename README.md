@@ -38,11 +38,16 @@ Telemetry is published to MQTT only; configure the `[mqtt]` section in `solarmon
 | `enable` | `false` | Enable MQTT publishing; the example config sets this to `true` |
 | `host` / `port` | `127.0.0.1` / `1883` | Broker address |
 | `username` / `password` | – | Broker credentials (optional) |
-| `base_topic` | `solar/inverter` | State topics are `<base_topic>/<inverter name>/<sensor>`; shared availability on `<base_topic>/availability` |
+| `base_topic` | `solar/inverter` | State topics are `<base_topic>/<inverter name>/<sensor>`; inverter polling availability is on `<base_topic>/availability`, and MQTT service availability is on `<base_topic>/service` |
 | `retain` | `true` | Retain state messages |
 | `ha_discovery` | `true` | Publish Home Assistant MQTT discovery configs |
 | `ha_prefix` | `homeassistant` | HA discovery prefix |
 | `device_id` / `device_name` | `solar_inverter` / `Solar Inverter` | Base for per-inverter HA device identities and names |
+
+Home Assistant Power, PV Power, PV1 Current, and energy sensors use the service
+availability topic. Power, PV Power, and PV1 Current are published as `0` when
+an inverter poll returns no data; energy sensors retain their last readings
+while the inverter is asleep. Other sensors use inverter polling availability.
 
 Each `[inverters.<name>]` section has its own MQTT state topics and Home
 Assistant device. The name must be non-empty and cannot contain `/`, `+`, `#`

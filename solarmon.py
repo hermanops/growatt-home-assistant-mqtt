@@ -62,12 +62,15 @@ def mqtt_setup(cfg):
     avail_topic = f"{base}/availability"
     client.will_set(avail_topic, payload="offline", qos=0, retain=True)
     client.solarmon_availability = MqttAvailability(client, avail_topic)
+    service_topic = f"{base}/service"
+    client.will_set(service_topic, payload="offline", qos=0, retain=True)
 
     def on_connect(c, userdata, flags, reason_code, properties):
         if reason_code != 0:
             print(f"MQTT connect failed: {reason_code}")
             return
         client.solarmon_availability.publish()
+        c.publish(service_topic, "online", qos=0, retain=True)
         mqtt_publish_discovery(c, cfg)
 
     client.on_connect = on_connect
@@ -152,12 +155,17 @@ def mqtt_publish_discovery(client, cfg):
             uid = f"{device_id}_{suffix}"
             cfg_topic = f"{prefix}/sensor/{uid}/config"
             state_topic = f"{base}/{inverter_name}/{suffix}"
+            sensor_avail_topic = (
+                f"{base}/service"
+                if suffix in ("power", "pv_power", "pv1_current", "energy_today", "energy_total")
+                else avail_topic
+            )
 
             payload = {
                 "name": name,
                 "unique_id": uid,
                 "state_topic": state_topic,
-                "availability_topic": avail_topic,
+                "availability_topic": sensor_avail_topic,
                 "payload_available": "online",
                 "payload_not_available": "offline",
                 "device": device,
@@ -266,19 +274,26 @@ def main(config_path=None):
             growatt = inverter['growatt']
             try:
                 info = growatt.read()
-
-                if info is None:
-                    continue
-
-                online = True
-
-                if mqtt_client:
-                    mqtt_publish_values(mqtt_client, settings, inverter['name'], info)
-
             except Exception as err:
                 print(growatt.name)
                 print(err)
                 inverter['error_until'] = time.monotonic() + error_interval
+                info = None
+
+            if info is None:
+                if mqtt_client:
+                    mqtt_publish_values(
+                        mqtt_client, settings, inverter['name'], {
+                            'Pac': 0,
+                            'Ppv': 0,
+                            'PV1Curr': 0,
+                        })
+                continue
+
+            online = True
+
+            if mqtt_client:
+                mqtt_publish_values(mqtt_client, settings, inverter['name'], info)
 
         if mqtt_client:
             mqtt_client.solarmon_availability.set_online(online)

@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from configparser import RawConfigParser
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call as mock_call, patch
 
 import growatt
 import solarmon
@@ -81,6 +81,37 @@ class SolarmonTests(unittest.TestCase):
         publish.assert_called_once_with(mqtt_client, cfg, 'roof', {'Pac': 42})
         sleep.assert_called_once_with(5)
 
+    def test_main_publishes_zero_generation_sensors_when_poll_fails(self):
+        for read_result in (None, OSError('read failed')):
+            with self.subTest(read_result=read_result):
+                cfg = RawConfigParser()
+                cfg.read_dict({
+                    'query': {'interval': '5', 'offline_interval': '60'},
+                    'inverters.roof': {'unit': '1'},
+                })
+                serial = Mock()
+                serial.connect.return_value = True
+                inverter = Mock()
+                if isinstance(read_result, Exception):
+                    inverter.read.side_effect = read_result
+                else:
+                    inverter.read.return_value = read_result
+                mqtt_client = Mock()
+
+                with (
+                    patch.object(solarmon, 'load_settings', return_value=cfg),
+                    patch.object(solarmon, 'ModbusClient', return_value=serial),
+                    patch.object(solarmon, 'Growatt', return_value=inverter),
+                    patch.object(solarmon, 'mqtt_setup', return_value=mqtt_client),
+                    patch.object(solarmon, 'mqtt_publish_values') as publish,
+                    patch.object(solarmon.time, 'sleep', side_effect=KeyboardInterrupt),
+                ):
+                    with self.assertRaises(KeyboardInterrupt):
+                        solarmon.main()
+
+                publish.assert_called_once_with(
+                    mqtt_client, cfg, 'roof', {'Pac': 0, 'Ppv': 0, 'PV1Curr': 0})
+
     def test_mqtt_discovery_payload(self):
         cfg = RawConfigParser()
         cfg.read_dict({
@@ -104,7 +135,7 @@ class SolarmonTests(unittest.TestCase):
         self.assertEqual(topic, 'homeassistant/sensor/solar_inverter_726f6f66_power/config')
         self.assertEqual(discovery['unique_id'], 'solar_inverter_726f6f66_power')
         self.assertEqual(discovery['state_topic'], 'solar/inverter/roof/power')
-        self.assertEqual(discovery['availability_topic'], 'solar/inverter/availability')
+        self.assertEqual(discovery['availability_topic'], 'solar/inverter/service')
         self.assertEqual(discovery['payload_available'], 'online')
         self.assertEqual(discovery['payload_not_available'], 'offline')
         self.assertEqual(discovery['device']['identifiers'], ['solar_inverter_726f6f66'])
@@ -189,8 +220,12 @@ class SolarmonTests(unittest.TestCase):
         solarmon.mqtt_publish_discovery(client, cfg)
         discovery = [json.loads(payload) for _, payload, _, _ in client.published]
         self.assertEqual(len(discovery), 2 * len(solarmon.SENSOR_DEFS))
-        self.assertEqual({entry['availability_topic'] for entry in discovery},
-                         {'solar/inverter/availability'})
+        for entry in discovery:
+            stays_available = entry['unique_id'].endswith(
+                ('_power', '_pv_power', '_pv1_current', '_energy_today', '_energy_total'))
+            expected_topic = (
+                'solar/inverter/service' if stays_available else 'solar/inverter/availability')
+            self.assertEqual(entry['availability_topic'], expected_topic)
         self.assertEqual(len({entry['unique_id'] for entry in discovery}), len(discovery))
         devices = {entry['device']['identifiers'][0] for entry in discovery}
         self.assertEqual(len(devices), 2)
@@ -264,11 +299,29 @@ class SolarmonTests(unittest.TestCase):
                 solarmon.main()
 
         self.assertEqual(mqtt_client.published, [
+            ('solar/inverter/roof/power', '0', 0, True),
+            ('solar/inverter/roof/pv_power', '0', 0, True),
+            ('solar/inverter/roof/pv1_current', '0.00', 0, True),
+            ('solar/inverter/garage/power', '0', 0, True),
+            ('solar/inverter/garage/pv_power', '0', 0, True),
+            ('solar/inverter/garage/pv1_current', '0.00', 0, True),
             ('solar/inverter/availability', 'offline', 0, True),
             ('solar/inverter/roof/power', '42', 0, True),
+            ('solar/inverter/garage/power', '0', 0, True),
+            ('solar/inverter/garage/pv_power', '0', 0, True),
+            ('solar/inverter/garage/pv1_current', '0.00', 0, True),
             ('solar/inverter/availability', 'online', 0, True),
+            ('solar/inverter/roof/power', '0', 0, True),
+            ('solar/inverter/roof/pv_power', '0', 0, True),
+            ('solar/inverter/roof/pv1_current', '0.00', 0, True),
             ('solar/inverter/garage/power', '13', 0, True),
             ('solar/inverter/availability', 'online', 0, True),
+            ('solar/inverter/roof/power', '0', 0, True),
+            ('solar/inverter/roof/pv_power', '0', 0, True),
+            ('solar/inverter/roof/pv1_current', '0.00', 0, True),
+            ('solar/inverter/garage/power', '0', 0, True),
+            ('solar/inverter/garage/pv_power', '0', 0, True),
+            ('solar/inverter/garage/pv1_current', '0.00', 0, True),
             ('solar/inverter/availability', 'offline', 0, True),
         ])
         self.assertEqual([call.args[0] for call in sleep.call_args_list], [60, 5, 5, 60])
@@ -315,8 +368,10 @@ class SolarmonTests(unittest.TestCase):
         client = Mock()
         with patch.object(solarmon.mqtt, 'Client', return_value=client):
             solarmon.mqtt_setup(cfg)
-        client.will_set.assert_called_once_with(
-            'solar/inverter/availability', payload='offline', qos=0, retain=True)
+        self.assertEqual(client.will_set.call_args_list, [
+            mock_call('solar/inverter/availability', payload='offline', qos=0, retain=True),
+            mock_call('solar/inverter/service', payload='offline', qos=0, retain=True),
+        ])
 
         client.on_connect(client, None, None, 1, None)
         client.publish.assert_not_called()
@@ -330,10 +385,17 @@ class SolarmonTests(unittest.TestCase):
             if call.args[0] == 'solar/inverter/availability'
         ]
         self.assertEqual(availability, ['offline', 'online', 'online', 'offline', 'offline'])
+        service = [
+            call for call in client.publish.call_args_list
+            if call.args[0] == 'solar/inverter/service'
+        ]
+        self.assertEqual([call.args[1] for call in service], ['online', 'online', 'online'])
+        for call in service:
+            self.assertEqual(call.kwargs, {'qos': 0, 'retain': True})
         for call in client.publish.call_args_list:
             if call.args[0] == 'solar/inverter/availability':
                 self.assertEqual(call.kwargs, {'qos': 0, 'retain': True})
-        self.assertEqual(client.publish.call_count, 3 * (1 + 2 * len(solarmon.SENSOR_DEFS)) + 2)
+        self.assertEqual(client.publish.call_count, 3 * (2 + 2 * len(solarmon.SENSOR_DEFS)) + 2)
         discoveries = [
             json.loads(call.args[1])
             for call in client.publish.call_args_list

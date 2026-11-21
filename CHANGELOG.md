@@ -9,6 +9,15 @@ the release process.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-11-21
+
+### Fixed
+
+- Keep Power, PV Power, PV1 Current, and energy counters available separately
+  from inverter polling status. Publish zero for the three live generation
+  sensors when an inverter does not respond, while preserving the last energy
+  counter readings.
+
 ## [1.0.0] - 2026-11-21
 
 First tagged release. Reads Growatt PV inverters over RS485/Modbus RTU and
@@ -46,5 +55,6 @@ publishes telemetry to MQTT with Home Assistant MQTT discovery.
 - InfluxDB and Grafana artifacts; the workflow is MQTT-only.
 - Deprecated `default_entity_id` from Home Assistant discovery payloads.
 
-[Unreleased]: https://github.com/hermanops/growatt-home-assistant-mqtt/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/hermanops/growatt-home-assistant-mqtt/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/hermanops/growatt-home-assistant-mqtt/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/hermanops/growatt-home-assistant-mqtt/releases/tag/v1.0.0

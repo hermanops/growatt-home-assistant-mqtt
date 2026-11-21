@@ -118,7 +118,6 @@ def mqtt_publish_discovery(client, cfg):
         payload = {
             "name": name,
             "unique_id": uid,
-            "default_entity_id": f"sensor.{device_id}_{suffix}",
             "state_topic": state_topic,
             "availability_topic": avail_topic,
             "payload_available": "online",

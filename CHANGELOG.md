@@ -9,6 +9,15 @@ the release process.
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** require Python 3.10 or later and pymodbus 3.10 or later
+  (pinned to 3.16.2). The Modbus calls use `device_id=` instead of `slave=`.
+  Debian 11 (Python 3.9) hosts must upgrade the OS and rebuild the virtualenv;
+  see [MIGRATION.md](MIGRATION.md).
+- CI tests Python 3.10 (floor) and 3.13 (Debian 13).
+- Dependabot now proposes pymodbus updates again.
+
 ## [1.0.1] - 2026-11-21
 
 ### Fixed

@@ -7,12 +7,12 @@
   `.venv/bin/python -m unittest discover -s tests -v`
 - For a quick single test module, run:
   `.venv/bin/python -m unittest tests.test_solarmon -v`
-- CI runs Ruff, byte compilation, unittest discovery, and an import check on Python 3.9 and 3.12. Before finishing Python changes, run:
+- CI runs Ruff, byte compilation, unittest discovery, and an import check on Python 3.10 and 3.13. Before finishing Python changes, run:
   - `.venv/bin/ruff check .`
   - `.venv/bin/python -m py_compile solarmon.py growatt.py`
   - `.venv/bin/python -m unittest discover -s tests -v`
-- Report lint and unit-test results separately; CI jobs may be named `lint (3.9)` or `lint (3.12)` while also running unit tests.
-- Dependencies are pinned in `requirements.txt`: Python 3.9 uses pymodbus 3.8.6 and `slave=`. Pymodbus 3.10+ requires Python 3.10+ and uses `device_id=` instead.
+- Report lint and unit-test results separately; CI jobs may be named `lint (3.10)` or `lint (3.13)` while also running unit tests.
+- Dependencies are pinned in `requirements.txt`: pymodbus 3.10+ (pinned 3.16.2) requires Python 3.10+ and uses `device_id=`; `slave=` is no longer supported.
 
 ## Architecture
 

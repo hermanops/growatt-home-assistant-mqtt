@@ -9,6 +9,8 @@ the release process.
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-24
+
 ### Changed
 
 - **Breaking:** require Python 3.10 or later and pymodbus 3.10 or later
@@ -66,6 +68,7 @@ publishes telemetry to MQTT with Home Assistant MQTT discovery.
 - InfluxDB and Grafana artifacts; the workflow is MQTT-only.
 - Deprecated `default_entity_id` from Home Assistant discovery payloads.
 
-[Unreleased]: https://github.com/hermanops/growatt-home-assistant-mqtt/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/hermanops/growatt-home-assistant-mqtt/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/hermanops/growatt-home-assistant-mqtt/compare/v1.0.1...v2.0.0
 [1.0.1]: https://github.com/hermanops/growatt-home-assistant-mqtt/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/hermanops/growatt-home-assistant-mqtt/releases/tag/v1.0.0

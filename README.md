@@ -13,7 +13,7 @@ this repo, see [MIGRATION.md](MIGRATION.md) first.
 
 How to use
 ----
-- A Linux-based host running Python 3.9+ (for example, a Raspberry Pi)
+- A Linux-based host running Python 3.10+ (Debian 12 or newer; for example, a Raspberry Pi)
 - Connect the host to the inverter's RS485 port with an RS485-to-USB adapter
 - Copy `solarmon.cfg.example` to `solarmon.cfg` and modify the config values to your setup as needed
 - Install as a systemd service (recommended): see [Installation](#installation-raspberry-pi--debian)
@@ -82,10 +82,10 @@ VERSION2 callbacks have different signatures; for example, `on_connect` takes
 signatures match the selected API version. This project already selects
 VERSION2.
 
-When upgrading this setup on Raspberry Pi OS 12 (Bookworm), Python 3.11 allows
-using pymodbus 3.10 or later. Those versions require changing the Modbus calls
-from `slave=` to `device_id=`; the current pymodbus 3.8.6 setup still uses
-`slave=`.
+This project targets pymodbus 3.10 or later (tested with 3.16.2), which needs
+Python 3.10+. The Modbus calls use `device_id=`; older pymodbus versions used
+`slave=` and are not supported. Debian 11 (Python 3.9) hosts must upgrade the
+OS first; see [MIGRATION.md](MIGRATION.md).
 
 Reading from Multiple Units
 ----

@@ -1,5 +1,5 @@
-# pymodbus 3.9+ requires Python >=3.10; 3.8.6 is the last 3.x supporting Python 3.9 (Raspberry Pi / Debian 11)
+# pymodbus 3.10+ uses device_id= (not slave=) and requires Python >=3.10 (Debian 12+).
 # All versions pinned: updates arrive as Dependabot PRs, never automatically on the Pi.
-pymodbus==3.8.6
+pymodbus==3.16.2
 pyserial==3.5
 paho-mqtt==2.2.0

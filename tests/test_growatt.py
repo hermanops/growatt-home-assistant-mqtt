@@ -24,10 +24,10 @@ class FakeClient:
     def __init__(self, blocks=None):
         self.blocks = blocks or {}
 
-    def read_holding_registers(self, address, count=1, slave=1):
+    def read_holding_registers(self, address, count=1, device_id=1):
         return FakeResponse(self.blocks.get(address, [0] * count))
 
-    def read_input_registers(self, address, count=1, slave=1):
+    def read_input_registers(self, address, count=1, device_id=1):
         return FakeResponse(self.blocks.get(address, [0] * count))
 
 

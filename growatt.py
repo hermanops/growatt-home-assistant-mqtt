@@ -3,8 +3,8 @@
 #
 # Growatt 1000-S (S-series) over RS485 Modbus RTU.
 # Register map: Growatt Inverter Modbus RTU Protocol V3.04/V3.05.
-# Tested API: pymodbus 3.8.6 (Python 3.9, Debian 11). Uses `slave=`.
-# NOTE: pymodbus >=3.10 renamed `slave=` to `device_id=`.
+# Tested API: pymodbus 3.16.2 (Python 3.13, Debian 13). Uses `device_id=`.
+# NOTE: pymodbus <3.10 used `slave=`; this code no longer supports those versions.
 
 import time
 import logging
@@ -119,7 +119,7 @@ def _read_input_safe(client, unit, start, count, retries=2, delay=0.05):
     last_err = None
     for attempt in range(retries + 1):
         try:
-            resp = client.read_input_registers(start, count=count, slave=unit)
+            resp = client.read_input_registers(start, count=count, device_id=unit)
             if _resp_ok(resp):
                 return resp
             last_err = resp
@@ -147,7 +147,7 @@ class Growatt:
     def read_info(self):
         """Read modbus version. Non-fatal if inverter is offline (e.g. nighttime)."""
         try:
-            row = self.client.read_holding_registers(73, count=1, slave=self.unit)
+            row = self.client.read_holding_registers(73, count=1, device_id=self.unit)
             if _resp_ok(row):
                 self.modbusVersion = row.registers[0]
             else:

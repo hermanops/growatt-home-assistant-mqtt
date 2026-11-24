@@ -1,8 +1,31 @@
 Migrating an existing install
 ----
 
-This file is only for installs created before November 2026. A fresh install
-follows [README.md](README.md) and needs nothing here.
+This file is only for existing installs. A fresh install follows
+[README.md](README.md) and needs nothing here.
+
+Migrating from pymodbus 3.8.6 / Python 3.9 (Debian 11)
+----
+The pinned pymodbus moved to 3.16.2, which needs Python 3.10 or later.
+`scripts/update.sh` only creates the virtualenv when it is missing, so a venv
+built with Python 3.9 stays in place and `pip install` fails. Upgrade the OS to
+Debian 12 or newer, then rebuild the venv. The MQTT topics and the config file
+do not change.
+
+```bash
+# Host: solarmon (Pi), as the user that owns the checkout (not root)
+python3 --version                  # must be 3.10 or later
+cd ~/solarmon
+sudo systemctl stop solarmon
+git pull --ff-only
+rm -rf .venv
+python3 -m venv .venv
+bash scripts/update.sh
+```
+
+The old Debian 11 image also needs the paths in `solarmon.service` to match
+your user and install directory; `update.sh` shows a diff when the unit in the
+repo differs from the installed one.
 
 Migrate in two steps: first the service (new venv-based unit), then the MQTT
 topics (state topics and Home Assistant devices now include the inverter name).

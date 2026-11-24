@@ -9,8 +9,11 @@ Migrating from pymodbus 3.8.6 / Python 3.9 (Debian 11)
 The pinned pymodbus moved to 3.16.2, which needs Python 3.10 or later.
 `scripts/update.sh` only creates the virtualenv when it is missing, so a venv
 built with Python 3.9 stays in place and `pip install` fails. Upgrade the OS to
-Debian 12 or newer, then rebuild the venv. The MQTT topics and the config file
-do not change.
+Debian 12 or newer, then rebuild the venv. The pymodbus and Python upgrade
+itself does not change the MQTT topics or the config file. An install that
+predates the November 2026 topic layout still needs the separate
+[topic migration](#migrating-mqtt-topics-and-home-assistant-entities) below;
+do not skip it.
 
 ```bash
 # Host: solarmon (Pi), as the user that owns the checkout (not root)

@@ -23,26 +23,31 @@ StateCodes = {
     3: 'Fault'
 }
 
-# Verify these texts against the protocol PDF for your firmware.
+# Input register 40 (fault code). Texts follow table &*1 of the Growatt PV
+# Inverter Modbus RS485 RTU Protocol V3.14 (docs/). Values 1-23 are shown on
+# the inverter as "Error: 99+x"; see fault_text(). The protocol defines no
+# other values for the S-series.
 ErrorCodes = {
     0: 'No Fault',
     24: 'Auto Test Failed',
     25: 'No AC Connection',
     26: 'PV Isolation Low',
-    27: 'Residual Current High',
-    28: 'DC Voltage High',
-    29: 'AC Voltage Outrange',
-    30: 'AC Freq Outrange',
-    31: 'Module Temperature High',
-    32: 'Ambient Temp High',
-    33: 'Fan Stuck',
-    34: 'EEPROM Fail',
-    35: 'Relay Check Fail',
-    36: 'DCI Outrange',
-    37: 'GFCI Outrange',
-    38: 'GFCI Device Fail',
-    39: 'PV Voltage Outrange',
+    27: 'Residual I High',
+    28: 'Output High DCI',
+    29: 'PV Voltage High',
+    30: 'AC V Outrange',
+    31: 'AC F Outrange',
+    32: 'Module Hot',
 }
+
+
+def fault_text(code):
+    """Return the inverter's fault description for an input register 40 value."""
+    if code in ErrorCodes:
+        return ErrorCodes[code]
+    if isinstance(code, int) and 1 <= code <= 23:
+        return 'Error: %d' % (99 + code)
+    return str(code)
 
 
 # ---------------------------------------------------------------------------
@@ -215,7 +220,7 @@ class Growatt:
                 'FacFault': read_single(row, 5, 100),           # Hz (0.01)
                 'TempFault': read_single(row, 6, signed=True),  # °C (0.1)
                 'FaultCode': fault_code,
-                'Fault': ErrorCodes.get(fault_code, str(fault_code)),
+                'Fault': fault_text(fault_code),
                 'IPMTemp': read_single(row, 8, signed=True),    # °C (0.1)
             })
 

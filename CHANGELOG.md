@@ -9,6 +9,14 @@ the release process.
 
 ## [Unreleased]
 
+### Fixed
+
+- Decode the inverter fault code (input register 40) with the texts from the
+  Growatt Modbus RS485 RTU Protocol V3.14. Codes 28 to 32 showed the wrong
+  description, codes 33 to 39 are not defined by the protocol, and codes 1 to
+  23 now show as "Error: 99+x" like the inverter display. Unknown codes still
+  show as the number.
+
 ## [2.0.0] - 2026-11-24
 
 ### Changed

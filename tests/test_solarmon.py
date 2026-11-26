@@ -152,7 +152,21 @@ class SolarmonTests(unittest.TestCase):
         serial.read_holding_registers.return_value.registers = [1]
         inverter = growatt.Growatt(serial, 'main', 1)
 
-        for code, text in ((0, 'No Fault'), (29, 'AC Voltage Outrange'), (999, '999')):
+        cases = (
+            (0, 'No Fault'),
+            (1, 'Error: 100'),
+            (23, 'Error: 122'),
+            (24, 'Auto Test Failed'),
+            (27, 'Residual I High'),
+            (28, 'Output High DCI'),
+            (29, 'PV Voltage High'),
+            (30, 'AC V Outrange'),
+            (31, 'AC F Outrange'),
+            (32, 'Module Hot'),
+            (33, '33'),
+            (999, '999'),
+        )
+        for code, text in cases:
             with self.subTest(code=code):
                 core = SimpleNamespace(registers=[0] * 33)
                 fault = SimpleNamespace(registers=[0] * 7 + [code, 0])
